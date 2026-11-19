@@ -120,6 +120,28 @@
     .option[aria-pressed="true"] { color: var(--green); border-color: #4a633d; background: var(--green-dark); font-weight: 650; }
     .settings-heading + .options { margin-top: 6px; }
     .settings-note { color: var(--muted); margin-top: 5px; font-size: .875rem; }
+    .distance-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    .distance-field { display: grid; gap: 4px; color: var(--muted); font-size: .875rem; }
+    .device-field { margin-top: 10px; }
+    .distance-field select, .distance-field input {
+      width: 100%; min-width: 0; min-height: 44px; padding: 7px 10px; border: 1px solid #3c4940;
+      border-radius: 9px; background-color: #191e1a; color: var(--text); font: inherit; font-size: 1rem;
+    }
+    .distance-field select {
+      appearance: none; padding-right: 27px;
+      background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position: right 16px center, right 11px center; background-size: 5px 5px; background-repeat: no-repeat;
+    }
+    .distance-result { margin-block: 10px; padding: 10px 11px; border: 1px solid #4a633d; border-radius: 9px; background: var(--green-dark); }
+    .distance-result strong { display: block; color: var(--green); }
+    .distance-result p { margin-top: 3px; font-size: .875rem; }
+    .calibration summary { min-height: 44px; padding: 9px 0; color: var(--text); cursor: pointer; }
+    .calibration form > * + * { margin-top: 9px; }
+    .ruler-reference { position: relative; width: min(220px, calc(100% - 6px)); height: 16px; margin-inline: auto; }
+    .ruler-reference::before { content: ""; position: absolute; inset: 7px 0 auto; height: 2px; background: #fff; }
+    .ruler-reference i { position: absolute; top: 0; left: 0; width: 2px; height: 16px; transform: translateX(-50%); background: #fff; }
+    .ruler-reference i + i { left: 100%; }
+    .calibration button { padding: 6px 12px; }
     .switch { min-height: 40px; padding: 3px 0 3px 8px; border: 0; background: none; display: inline-flex; align-items: center; gap: 8px; font-size: .875rem; }
     .switch-track { width: 38px; height: 22px; border-radius: 30px; border: 1px solid #59625a; background: #303832; padding: 3px; }
     .switch-track::before { content: ""; display: block; width: 14px; height: 14px; background: #d2dbd0; border-radius: 50%; }
@@ -150,6 +172,8 @@
     }
     .focus-view[data-edge="left"] { --edge: calc(env(safe-area-inset-left, 0px) + 4px); }
     .focus-view[data-edge="right"] { --edge: calc(100% - env(safe-area-inset-right, 0px) - 4px); }
+    .focus-view[data-measured="true"] { --edge: calc((100% - var(--phone-span)) / 2); }
+    .focus-view[data-measured="true"][data-edge="right"] { --edge: calc((100% + var(--phone-span)) / 2); }
     .focus-view[data-edge="left"] .focus-line, .focus-view[data-edge="right"] .focus-line {
       top: 50%; left: calc(var(--edge) + var(--travel)); width: var(--line-thickness); height: 100%;
     }
@@ -242,6 +266,51 @@
           <p class="settings-note" id="tempo-note">Ett slag i valt tempo motsvarar tiden för en baksving.</p>
         </div>
         <div class="settings-group">
+          <div class="toggle-row">
+            <h3 class="settings-heading" id="distance-title">Avståndsträning</h3>
+            <button class="switch" id="distance-mode" type="button" role="switch" aria-checked="false" aria-labelledby="distance-title" aria-controls="distance-options"><span id="distance-mode-label" aria-hidden="true">Av</span><span class="switch-track" aria-hidden="true"></span></button>
+          </div>
+          <div id="distance-options" hidden>
+            <p class="settings-note">95 BPM. Lägg mobilen längs svingen, med överkanten i höjd med bollen och resten av mobilen åt baksvingens håll.</p>
+            <div class="distance-fields">
+              <label class="distance-field">Stimp
+                <select id="stimp"><option value="">Välj stimp</option><option value="8">8</option><option value="9">9</option><option value="10">10</option></select>
+              </label>
+              <label class="distance-field">Puttlängd
+                <select id="putt-length"><option value="">Välj längd</option><option value="3">3 fot</option><option value="6">6 fot</option><option value="9">9 fot</option><option value="12">12 fot</option><option value="15">15 fot</option></select>
+              </label>
+            </div>
+            <label class="distance-field device-field">Telefonmodell
+              <select id="device-model" aria-describedby="device-note">
+                <option value="">Välj telefonmodell</option>
+                <optgroup id="suggested-models" label="Förslag från skärmen" hidden></optgroup>
+                <optgroup id="other-models" label="iPhone-modeller"></optgroup>
+                <option value="manual">Mät med linjal</option>
+              </select>
+            </label>
+            <p class="settings-note" id="device-note">På iPhone hittar du modellnamnet under Inställningar → Allmänt → Om.</p>
+            <div class="distance-result" id="distance-result" aria-live="polite" hidden>
+              <strong id="backswing-length"></strong>
+              <p id="turn-point"></p>
+            </div>
+            <details class="calibration" id="calibration" hidden>
+              <summary id="calibration-summary">Kalibrera mobilen med linjal</summary>
+              <form id="calibration-form">
+                <label class="distance-field">Mobilens längd i cm
+                  <input id="phone-length" type="text" inputmode="decimal" autocomplete="off" placeholder="T.ex. 14,7">
+                </label>
+                <p class="settings-note">Mät mobilen från kant till kant längs långsidan. Mät sedan mellan de två lodräta markeringarna här.</p>
+                <div class="ruler-reference" id="ruler-reference" aria-hidden="true"><i></i><i></i></div>
+                <label class="distance-field">Mellan markeringarna i cm
+                  <input id="ruler-length" type="text" inputmode="decimal" autocomplete="off" placeholder="T.ex. 3,8">
+                </label>
+                <button class="option" type="submit">Spara kalibrering</button>
+                <p class="settings-note" id="calibration-message" role="status"></p>
+              </form>
+            </details>
+          </div>
+        </div>
+        <div class="settings-group">
           <h3 class="settings-heading" id="ratio-title">Rytm</h3>
           <div class="options" role="group" aria-labelledby="ratio-title" aria-describedby="ratio-note">
             <button type="button" class="option" data-ratio="1.5" aria-pressed="false">1,5 : 1</button>
@@ -286,9 +355,55 @@
       { frequency: 890, length: 0.08, volume: 0.34 }, // Träff
     ];
     const practiceTip = 'Tryck på Starta och vrid mobilen. Tryck på skärmen eller vänd tillbaka för att avsluta helskärm.';
-    const defaults = { bpm: 72, ratio: 2, direction: 'right', sound: true };
+    const distanceSetupTip = 'Välj stimp och puttlängd. Välj sedan telefonmodell eller mät med linjal.';
+    const distanceBpm = 95;
+    const puttLengths = [3, 6, 9, 12, 15];
+    const backswingTable = {
+      8: [16, 22, 26, 29, 33],
+      9: [16, 21, 25, 28, 31],
+      10: [15, 20, 23, 27, 29],
+    };
+    // Apple iPhone Compare: body height in mm, native short and long screen axes, and PPI.
+    // https://www.apple.com/iphone/compare/
+    const iphoneModels = new Map([
+      ['18-pro-max', 'iPhone 18 Pro Max', 163.4, 1320, 2868, 460],
+      ['18-pro', 'iPhone 18 Pro', 150, 1206, 2622, 460],
+      ['17-pro-max', 'iPhone 17 Pro Max', 163.4, 1320, 2868, 460],
+      ['17-pro', 'iPhone 17 Pro', 150, 1206, 2622, 460],
+      ['air', 'iPhone Air', 156.2, 1260, 2736, 460],
+      ['17', 'iPhone 17', 149.6, 1206, 2622, 460],
+      ['17e', 'iPhone 17e', 146.7, 1170, 2532, 460],
+      ['16-pro-max', 'iPhone 16 Pro Max', 163, 1320, 2868, 460],
+      ['16-pro', 'iPhone 16 Pro', 149.6, 1206, 2622, 460],
+      ['16-plus', 'iPhone 16 Plus', 160.9, 1290, 2796, 460],
+      ['16', 'iPhone 16', 147.6, 1179, 2556, 460],
+      ['16e', 'iPhone 16e', 146.7, 1170, 2532, 460],
+      ['15-pro-max', 'iPhone 15 Pro Max', 159.9, 1290, 2796, 460],
+      ['15-pro', 'iPhone 15 Pro', 146.6, 1179, 2556, 460],
+      ['15-plus', 'iPhone 15 Plus', 160.9, 1290, 2796, 460],
+      ['15', 'iPhone 15', 147.6, 1179, 2556, 460],
+      ['14-pro-max', 'iPhone 14 Pro Max', 160.7, 1290, 2796, 460],
+      ['14-pro', 'iPhone 14 Pro', 147.5, 1179, 2556, 460],
+      ['14-plus', 'iPhone 14 Plus', 160.8, 1284, 2778, 458],
+      ['14', 'iPhone 14', 146.7, 1170, 2532, 460],
+      ['13-pro-max', 'iPhone 13 Pro Max', 160.8, 1284, 2778, 458],
+      ['13-pro', 'iPhone 13 Pro', 146.7, 1170, 2532, 460],
+      ['13', 'iPhone 13', 146.7, 1170, 2532, 460],
+      ['13-mini', 'iPhone 13 mini', 131.5, 1080, 2340, 476],
+      ['12-pro-max', 'iPhone 12 Pro Max', 160.8, 1284, 2778, 458],
+      ['12-pro', 'iPhone 12 Pro', 146.7, 1170, 2532, 460],
+      ['12', 'iPhone 12', 146.7, 1170, 2532, 460],
+      ['12-mini', 'iPhone 12 mini', 131.5, 1080, 2340, 476],
+      ['11-pro-max', 'iPhone 11 Pro Max', 158, 1242, 2688, 458],
+      ['11-pro', 'iPhone 11 Pro', 144, 1125, 2436, 458],
+      ['11', 'iPhone 11', 150.9, 828, 1792, 326],
+      ['se3', 'iPhone SE (3:e generationen)', 138.4, 750, 1334, 326],
+      ['se2', 'iPhone SE (2:a generationen)', 138.4, 750, 1334, 326],
+    ].map(([id, name, heightMm, shortPx, longPx, ppi]) => [id, { name, heightMm, shortPx, longPx, ppi }]));
+    const defaults = { bpm: 72, ratio: 2, direction: 'right', sound: true, distanceMode: false, stimp: null, puttLength: null, deviceModel: null, calibration: null };
     const storageKey = 'puttakt.settings.v1';
     const timeFormat = new Intl.NumberFormat('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const lengthFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 2 });
     const byId = (id) => document.getElementById(id);
     const tempo = byId('tempo');
     const minBpm = Number(tempo.min);
@@ -301,6 +416,14 @@
     const startLabel = byId('start-label');
     const focusTrigger = byId('focus-trigger');
     const focusView = byId('focus-view');
+    const distanceMode = byId('distance-mode');
+    const stimpSelect = byId('stimp');
+    const puttLengthSelect = byId('putt-length');
+    const deviceModelSelect = byId('device-model');
+    const deviceNote = byId('device-note');
+    const calibrationPanel = byId('calibration');
+    const phoneLengthInput = byId('phone-length');
+    const rulerLengthInput = byId('ruler-length');
     const settingsContainers = [byId('site-header'), byId('main')];
     const soundButton = byId('sound');
     const soundLabel = byId('sound-label');
@@ -321,25 +444,121 @@
     let focusSawLandscape = false;
     let nativeFullscreen = false;
     let returnFocus;
+    let focusTravelPixels = null;
     const activeTones = new Set();
 
     function loadSettings() {
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey));
         if (!saved || typeof saved !== 'object') return { ...defaults };
+        const calibration = validCalibration(saved.calibration) ? saved.calibration : null;
         return {
           bpm: Number.isInteger(saved.bpm) && saved.bpm >= minBpm && saved.bpm <= maxBpm ? saved.bpm : defaults.bpm,
           ratio: [1.5, 2, 2.5].includes(saved.ratio) ? saved.ratio : defaults.ratio,
           direction: ['left', 'right'].includes(saved.direction) ? saved.direction : defaults.direction,
           sound: typeof saved.sound === 'boolean' ? saved.sound : defaults.sound,
+          distanceMode: saved.distanceMode === true,
+          stimp: Object.hasOwn(backswingTable, saved.stimp) ? Number(saved.stimp) : null,
+          puttLength: puttLengths.includes(saved.puttLength) ? saved.puttLength : null,
+          deviceModel: saved.deviceModel === 'manual' || iphoneModels.has(saved.deviceModel)
+            ? saved.deviceModel
+            : !Object.hasOwn(saved, 'deviceModel') && calibration ? 'manual' : null,
+          calibration,
         };
       } catch {
         return { ...defaults };
       }
     }
 
+    function validCalibration(calibration) {
+      if (!calibration) return false;
+      const { phoneCm, rulerCm, devicePixelsPerCm } = calibration;
+      return [phoneCm, rulerCm, devicePixelsPerCm].every((value) => Number.isFinite(value) && value > 0) && phoneCm > rulerCm;
+    }
+
+    function selectedBackswing() {
+      return backswingTable[settings.stimp]?.[puttLengths.indexOf(settings.puttLength)];
+    }
+
+    function phoneLengthCm() {
+      const model = iphoneModels.get(settings.deviceModel);
+      if (model) return model.heightMm / 10;
+      return settings.deviceModel === 'manual' ? settings.calibration?.phoneCm : undefined;
+    }
+
+    function canStart() {
+      return !settings.distanceMode || Boolean(selectedBackswing() && phoneLengthCm());
+    }
+
+    function activeBpm() {
+      return settings.distanceMode ? distanceBpm : settings.bpm;
+    }
+
+    function screenScale() {
+      return (window.devicePixelRatio || 1) * (window.visualViewport?.scale || 1);
+    }
+
+    function pixelsPerCm() {
+      const model = iphoneModels.get(settings.deviceModel);
+      if (!model) return settings.calibration.devicePixelsPerCm / screenScale();
+      const longCss = Math.max(window.screen.width, window.screen.height);
+      const panelLengthCm = model.longPx / model.ppi * 2.54;
+      // Use the screen's CSS length so this also covers displays that resample their pixels.
+      if (longCss > 0) return longCss / panelLengthCm / (window.visualViewport?.scale || 1);
+      return model.ppi / 2.54 / screenScale();
+    }
+
+    function suggestedIphoneModels() {
+      if (!/\biPhone\b/.test(window.navigator?.userAgent ?? '')) return [];
+      const ratio = window.devicePixelRatio || 1;
+      const shortPx = Math.min(window.screen.width, window.screen.height) * ratio;
+      const longPx = Math.max(window.screen.width, window.screen.height) * ratio;
+      return [...iphoneModels].filter(([, model]) => Math.abs(model.shortPx - shortPx) <= 3 && Math.abs(model.longPx - longPx) <= 3)
+        .map(([id]) => id);
+    }
+
+    function populateDeviceModels() {
+      const suggestions = new Set(suggestedIphoneModels());
+      const suggestedGroup = byId('suggested-models');
+      const otherGroup = byId('other-models');
+      suggestedGroup.hidden = suggestions.size === 0;
+      for (const [id, model] of iphoneModels) {
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = model.name;
+        (suggestions.has(id) ? suggestedGroup : otherGroup).append(option);
+      }
+    }
+
+    function measuredLength(input) {
+      const text = input.value.trim();
+      return /^\d+(?:[,.]\d+)?$/.test(text) ? Number(text.replace(',', '.')) : NaN;
+    }
+
+    function saveCalibration(event) {
+      event.preventDefault();
+      const message = byId('calibration-message');
+      const phoneCm = measuredLength(phoneLengthInput);
+      const rulerCm = measuredLength(rulerLengthInput);
+      const rulerPixels = byId('ruler-reference').getBoundingClientRect().width;
+      const calibration = { phoneCm, rulerCm, devicePixelsPerCm: rulerPixels * screenScale() / rulerCm };
+      if (!validCalibration(calibration)) {
+        message.textContent = 'Ange två positiva mått i cm. Mobilen ska vara längre än avståndet mellan markeringarna.';
+        return;
+      }
+      changeSetting('calibration', calibration);
+      message.textContent = 'Kalibrering sparad.';
+    }
+
+    function turnPointText(backswing, phoneCm) {
+      const difference = Math.round((backswing - phoneCm) * 100) / 100;
+      if (difference > 0) return `Sätt peggen ${lengthFormat.format(difference)} cm utanför mobilens bortre kant.`;
+      if (difference < 0) return `Vänd ${lengthFormat.format(-difference)} cm före mobilens bortre kant. Sätt peggen vid sidan av mobilen.`;
+      return 'Vänd vid mobilens bortre kant.';
+    }
+
     function timings() {
-      const back = 60 / settings.bpm;
+      const back = 60 / activeBpm();
       const forward = back / settings.ratio;
       const impact = back + forward;
       const finish = back + forward / forwardImpactTime;
@@ -371,7 +590,8 @@
         const intoScreen = focusView.dataset.edge === 'right' ? -1 : 1;
         // Map impact to the edge. Keep the full path beyond the clipped viewport.
         const displacement = (positions.impact - frame.position) / (positions.impact - positions.back);
-        focusView.style.setProperty('--travel', `${intoScreen * displacement * 82}%`);
+        const travel = intoScreen * displacement;
+        focusView.style.setProperty('--travel', focusTravelPixels === null ? `${travel * 82}%` : `${travel * focusTravelPixels}px`);
         focusView.style.setProperty('--opacity', frame.opacity);
         return;
       }
@@ -380,6 +600,18 @@
       if (phase.dataset.phase !== frame.phase) {
         phase.dataset.phase = frame.phase;
         phase.textContent = phaseLabels[frame.phase];
+      }
+    }
+
+    function updateFocusScale() {
+      if (focusView.hidden) return;
+      const measured = settings.distanceMode && canStart();
+      focusView.dataset.measured = String(measured);
+      focusTravelPixels = null;
+      if (measured) {
+        const scale = pixelsPerCm();
+        focusTravelPixels = selectedBackswing() * scale;
+        focusView.style.setProperty('--phone-span', `${phoneLengthCm() * scale}px`);
       }
     }
 
@@ -394,11 +626,12 @@
     }
 
     function showFocus(requestFullscreen = false) {
-      if (!focusView.hidden) return;
+      if (!focusView.hidden || !canStart()) return;
       returnFocus = requestFullscreen ? focusTrigger : startButton;
       focusSawLandscape = landscape.matches;
       focusView.dataset.edge = focusEdge();
       focusView.hidden = false;
+      updateFocusScale();
       document.body.classList.add('focus-active');
       for (const container of settingsContainers) container.inert = true;
       if (session) renderFrame(session);
@@ -429,26 +662,63 @@
       }
       focusSawLandscape ||= landscape.matches;
       focusView.dataset.edge = focusEdge();
+      updateFocusScale();
       if (session) renderFrame(session);
       else drawSwing(swingAt(-1, timings()));
     }
 
     function syncPractice() {
       const running = Boolean(session);
+      startButton.disabled = !running && !canStart();
+      focusTrigger.disabled = !canStart();
       startButton.dataset.playing = String(running);
       startLabel.textContent = running ? 'Stoppa' : starting ? 'Startar…' : 'Starta';
       track.dataset.idle = String(!running);
       startButton.setAttribute('aria-busy', String(starting));
     }
 
+    function updateDistanceControls() {
+      const enabled = settings.distanceMode;
+      const backswing = selectedBackswing();
+      const phoneCm = phoneLengthCm();
+      const manual = settings.deviceModel === 'manual';
+      distanceMode.setAttribute('aria-checked', String(enabled));
+      byId('distance-mode-label').textContent = enabled ? 'På' : 'Av';
+      byId('distance-options').hidden = !enabled;
+      stimpSelect.value = settings.stimp ?? '';
+      puttLengthSelect.value = settings.puttLength ?? '';
+      deviceModelSelect.value = settings.deviceModel ?? '';
+      calibrationPanel.hidden = !manual;
+      deviceNote.hidden = manual;
+      deviceNote.textContent = phoneCm && !manual
+        ? `Mobilens längd enligt Apple är ${lengthFormat.format(phoneCm)} cm.`
+        : 'På iPhone hittar du modellnamnet under Inställningar → Allmänt → Om.';
+      byId('distance-result').hidden = !enabled || !backswing;
+      if (enabled && backswing) {
+        byId('backswing-length').textContent = `Baksving ${lengthFormat.format(backswing)} cm`;
+        byId('turn-point').textContent = phoneCm
+          ? turnPointText(backswing, phoneCm)
+          : 'Välj telefonmodell eller mät med linjal för att få vändpunkten.';
+      }
+      byId('calibration-summary').textContent = settings.calibration
+        ? `Kalibrering · mobil ${lengthFormat.format(settings.calibration.phoneCm)} cm`
+        : 'Kalibrera mobilen med linjal';
+    }
+
     function updateControls() {
       const timing = timings();
-      byId('bpm').textContent = settings.bpm;
-      tempo.value = settings.bpm;
-      tempo.setAttribute('aria-valuetext', `${settings.bpm} BPM`);
-      slower.disabled = settings.bpm === minBpm;
-      faster.disabled = settings.bpm === maxBpm;
-      for (const button of bpmButtons) button.setAttribute('aria-pressed', String(Number(button.dataset.bpm) === settings.bpm));
+      const bpm = activeBpm();
+      byId('bpm').textContent = bpm;
+      tempo.value = bpm;
+      tempo.setAttribute('aria-valuetext', `${bpm} BPM`);
+      tempo.disabled = settings.distanceMode;
+      slower.disabled = settings.distanceMode || bpm === minBpm;
+      faster.disabled = settings.distanceMode || bpm === maxBpm;
+      for (const button of bpmButtons) {
+        button.disabled = settings.distanceMode;
+        button.setAttribute('aria-pressed', String(Number(button.dataset.bpm) === bpm));
+      }
+      byId('tempo-note').textContent = settings.distanceMode ? 'Tempot är låst i avståndsträningen.' : 'Ett slag i valt tempo motsvarar tiden för en baksving.';
       for (const button of ratioButtons) button.setAttribute('aria-pressed', String(Number(button.dataset.ratio) === settings.ratio));
       for (const button of directionButtons) button.setAttribute('aria-pressed', String(button.dataset.direction === settings.direction));
       soundButton.setAttribute('aria-checked', String(settings.sound));
@@ -459,12 +729,16 @@
       track.style.setProperty('--back', trackPercent(positions.back));
       track.style.setProperty('--origin', trackPercent(positions.impact));
       track.style.setProperty('--end', trackPercent(positions.end));
+      updateDistanceControls();
+      syncPractice();
+      if (!session && !starting) tip.textContent = canStart() ? practiceTip : distanceSetupTip;
     }
 
     function changeSetting(key, value) {
       if (settings[key] === value) return;
       settings[key] = value;
       try { localStorage.setItem(storageKey, JSON.stringify(settings)); } catch { /* Storage can be unavailable for local files. */ }
+      if (key === 'distanceMode' && (session || starting)) stop();
       updateControls();
       if (key === 'sound') {
         setVolume();
@@ -484,6 +758,7 @@
     }
 
     function setTempo(value) {
+      if (settings.distanceMode) return;
       changeSetting('bpm', Math.max(minBpm, Math.min(maxBpm, value)));
     }
 
@@ -587,6 +862,7 @@
     }
 
     async function start() {
+      if (!canStart()) return;
       const attempt = ++startAttempt;
       starting = true;
       syncPractice();
@@ -612,7 +888,7 @@
       activeTones.clear();
     }
 
-    function stop(message = practiceTip) {
+    function stop(message = canStart() ? practiceTip : distanceSetupTip) {
       startAttempt += 1;
       starting = false;
       clearSession();
@@ -625,9 +901,9 @@
 
     startButton.addEventListener('click', () => {
       if (session) stop();
-      else if (!starting) {
+      else if (!starting && canStart()) {
         void start();
-        if (touch.matches && landscape.matches) showFocus();
+        if (settings.distanceMode || (touch.matches && landscape.matches)) showFocus();
       }
     });
     focusTrigger.addEventListener('click', () => {
@@ -650,6 +926,7 @@
     landscape.addEventListener('change', handleOrientation);
     window.screen.orientation?.addEventListener('change', handleOrientation);
     window.addEventListener('orientationchange', handleOrientation);
+    window.visualViewport?.addEventListener('resize', updateFocusScale);
     slower.addEventListener('click', () => setTempo(settings.bpm - 1));
     faster.addEventListener('click', () => setTempo(settings.bpm + 1));
     tempo.addEventListener('input', () => setTempo(Number(tempo.value)));
@@ -657,6 +934,15 @@
     for (const button of ratioButtons) button.addEventListener('click', () => changeSetting('ratio', Number(button.dataset.ratio)));
     for (const button of directionButtons) button.addEventListener('click', () => changeSetting('direction', button.dataset.direction));
     soundButton.addEventListener('click', () => changeSetting('sound', !settings.sound));
+    distanceMode.addEventListener('click', () => changeSetting('distanceMode', !settings.distanceMode));
+    stimpSelect.addEventListener('change', () => changeSetting('stimp', Number(stimpSelect.value) || null));
+    puttLengthSelect.addEventListener('change', () => changeSetting('puttLength', Number(puttLengthSelect.value) || null));
+    deviceModelSelect.addEventListener('change', () => {
+      const selection = deviceModelSelect.value;
+      changeSetting('deviceModel', selection || null);
+      if (selection === 'manual' && !settings.calibration) calibrationPanel.open = true;
+    });
+    byId('calibration-form').addEventListener('submit', saveCalibration);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && (session || starting)) stop('Tryck på Starta för att fortsätta.');
     });
@@ -692,7 +978,13 @@
       } catch { offlineFailed(); }
     }
 
+    populateDeviceModels();
     updateControls();
+    if (settings.calibration) {
+      phoneLengthInput.value = lengthFormat.format(settings.calibration.phoneCm);
+      rulerLengthInput.value = lengthFormat.format(settings.calibration.rulerCm);
+    }
+    calibrationPanel.open = settings.deviceModel === 'manual' && !settings.calibration;
     drawSwing(swingAt(-1, timings()));
     void prepareOffline();
   </script>
