@@ -19,6 +19,7 @@
       --text: #eef2ec;
       --muted: #a8b4aa;
       --green: #b9f479;
+      --stroke: #fff;
       --green-dark: #202c18;
       --gold: #ffd68a;
       font: 16px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -80,10 +81,9 @@
     .reference.end { left: var(--end); }
     .reference.impact { left: var(--origin); width: 12px; height: 12px; top: calc(49% - 5.5px); border-color: var(--gold); box-shadow: 0 0 0 4px #ffd68a20; }
     .impact-guide { position: absolute; top: calc(49% - 55px); height: 110px; left: var(--origin); border-left: 1px dashed #ffd68a66; }
-    .marker { position: absolute; left: var(--position); top: 49%; width: 5px; height: clamp(66px, 11vw, 104px); transform: translate(-50%, -50%); border-radius: 7px; background: var(--green); box-shadow: 0 0 17px #b9f48594; opacity: var(--marker-opacity); }
-    .track[data-impact="true"] .marker { background: var(--gold); box-shadow: 0 0 21px #ffd68aaf; }
-    .track[data-idle="true"] .marker { height: 64px; opacity: .54; }
-    .track-label { position: absolute; top: calc(49% + 58px); transform: translateX(-50%); color: var(--muted); font-size: .875rem; white-space: nowrap; }
+    .marker { position: absolute; left: var(--position); top: 49%; width: 5px; height: clamp(76px, 12.65vw, 120px); transform: translate(-50%, -50%); border-radius: 7px; background: var(--stroke); box-shadow: 0 0 15px #ffffff70; opacity: var(--marker-opacity); }
+    .track[data-idle="true"] .marker { height: 74px; }
+    .track-label { position: absolute; top: calc(49% + 66px); transform: translateX(-50%); color: var(--muted); font-size: .875rem; white-space: nowrap; }
     .track-label.back { left: clamp(33px, var(--back), calc(100% - 33px)); }
     .track-label.end { left: var(--end); }
     .track-label.impact { left: var(--origin); color: var(--gold); }
@@ -144,13 +144,13 @@
     .focus-view::backdrop { background: #000; }
     .focus-line {
       position: absolute; top: calc(var(--edge) + var(--travel)); left: 50%;
-      width: clamp(68px, 33vw, 150px); height: 5px; transform: translate(-50%, -50%);
-      border-radius: 3px; background: var(--green); opacity: var(--opacity); pointer-events: none;
+      width: clamp(78px, 38vw, 174px); height: 5px; transform: translate(-50%, -50%);
+      border-radius: 3px; background: var(--stroke); opacity: var(--opacity); pointer-events: none;
     }
     .focus-view[data-edge="left"] { --edge: calc(env(safe-area-inset-left, 0px) + 4px); }
     .focus-view[data-edge="right"] { --edge: calc(100% - env(safe-area-inset-right, 0px) - 4px); }
     .focus-view[data-edge="left"] .focus-line, .focus-view[data-edge="right"] .focus-line {
-      top: 50%; left: calc(var(--edge) + var(--travel)); width: 5px; height: clamp(68px, 33vh, 150px);
+      top: 50%; left: calc(var(--edge) + var(--travel)); width: 5px; height: clamp(78px, 38vh, 174px);
     }
     @media (max-width: 760px) {
       .workspace { grid-template-columns: 1fr; gap: 13px; }
@@ -179,6 +179,8 @@
       .intro { padding-block: 14px; }
       h1 { font-size: 2.2rem; }
       .track { min-height: 165px; }
+      .marker { max-height: 94px; }
+      .track-label { top: calc(49% + 52px); }
     }
   </style>
 </head>
@@ -273,7 +275,7 @@
     const positions = { back: 0.10, impact: 0.54, end: 0.88 };
     const resetTime = 1.25;
     const audioLeadIn = 0.14;
-    const preparationTime = 0.35;
+    const preparationTime = 0.40;
     const impactFraction = (positions.impact - positions.back) / (positions.end - positions.back);
     const forwardImpactTime = Math.acos(1 - 2 * impactFraction) / Math.PI;
     const phaseLabels = { ready: 'Redo', back: 'Baksving', forward: 'Framåt', impact: 'Träff', follow: 'Avslut', reset: 'Nästa putt' };
@@ -377,7 +379,6 @@
       if (phase.dataset.phase !== frame.phase) {
         phase.dataset.phase = frame.phase;
         phase.textContent = phaseLabels[frame.phase];
-        track.dataset.impact = String(frame.phase === 'impact');
       }
     }
 

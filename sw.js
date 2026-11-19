@@ -2,8 +2,8 @@
 
 const scope = self.registration.scope;
 const cachePrefix = `puttakt:${scope}:`;
-// Bump the version when publishing changes to the precached app or icons.
-const cacheName = `${cachePrefix}1`;
+// Bump this number for cache layout changes or changes to the manifest and icons.
+const cacheName = `${cachePrefix}2`;
 const entry = new URL('index.html', scope).href;
 const appFiles = [entry, ...['manifest.webmanifest', 'icon-192.png', 'icon-512.png'].map((file) => new URL(file, scope).href)];
 
@@ -33,13 +33,29 @@ async function offlineFirst(file, request) {
   return response;
 }
 
+async function loadPage() {
+  const cache = await caches.open(cacheName);
+  const signal = AbortSignal.timeout?.(2500);
+  let response;
+  try {
+    response = await fetch(entry, { cache: 'no-cache', signal });
+    if (response.ok) {
+      await cache.put(entry, response.clone()).catch(() => {});
+      if (!signal?.aborted) return response;
+    }
+  } catch {
+    // An offline or slow connection can still use the saved page.
+  }
+  return (await cache.match(entry)) ?? response ?? Response.error();
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   url.search = '';
   if (request.mode === 'navigate' && (url.href === scope || url.href === entry)) {
-    event.respondWith(offlineFirst(entry, request));
+    event.respondWith(loadPage());
   } else if (appFiles.includes(url.href)) {
     event.respondWith(offlineFirst(url.href, request));
   }
