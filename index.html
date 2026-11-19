@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#090b0a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <meta name="description" content="Träna puttningens tempo och rytm med en rörlig markör och synkade ljudsignaler.">
+  <title>Puttakt – tempoträning för puttning</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b0a;
+      --panel: #121513;
+      --line: #2b322c;
+      --text: #eef2ec;
+      --muted: #a8b4aa;
+      --green: #b9f479;
+      --green-dark: #202c18;
+      --gold: #ffd68a;
+      font: 16px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    button, input { font: inherit; }
+    button { cursor: pointer; color: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    button:disabled { cursor: default; opacity: .45; }
+    :focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }
+    h1, h2, h3, p { margin: 0; }
+    .shell {
+      max-width: 1216px; margin: auto;
+      padding-left: max(clamp(16px, 4vw, 48px), env(safe-area-inset-left, 0px));
+      padding-right: max(clamp(16px, 4vw, 48px), env(safe-area-inset-right, 0px));
+    }
+    .site-header { border-bottom: 1px solid #202621; padding-top: env(safe-area-inset-top, 0px); }
+    .masthead { min-height: 65px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .brand { display: flex; align-items: center; gap: 11px; font-size: 1.125rem; font-weight: 750; letter-spacing: -.025em; }
+    .brand-icon { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; gap: 3px; border-radius: 11px; background: var(--green); }
+    .brand-icon i { width: 2px; height: 9px; border-radius: 3px; background: #1a2914; }
+    .brand-icon i:nth-child(2) { height: 15px; }
+    .brand-icon i:nth-child(3) { height: 20px; }
+    .brand-icon i:nth-child(4) { height: 12px; }
+    .site-label { color: var(--muted); font-size: .875rem; }
+    .intro { padding-block: clamp(23px, 5vw, 50px) clamp(20px, 4vw, 34px); }
+    h1 { font-size: clamp(2.2rem, 5.7vw, 4.25rem); line-height: 1.03; font-weight: 740; letter-spacing: -.065em; }
+    .intro p { margin-top: 10px; color: var(--muted); }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(305px, 345px); gap: 16px; align-items: stretch; }
+    .practice, .settings { border: 1px solid var(--line); border-radius: 22px; overflow: hidden; }
+    .practice { display: flex; flex-direction: column; background: #0c100d; }
+    .practice-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 18px 22px 0; }
+    h2 { font-size: 1.04rem; letter-spacing: -.015em; }
+    .phase {
+      display: inline-flex; justify-content: center; align-items: center; gap: 7px; min-width: 103px;
+      padding: 4px 10px; border: 1px solid #364436; border-radius: 999px; color: #d8e9cf; background: #1c271d; font-size: .875rem;
+    }
+    .phase::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+    .phase[data-phase="ready"] { background: #151a16; color: var(--muted); border-color: var(--line); }
+    .phase[data-phase="ready"]::before, .phase[data-phase="reset"]::before { background: #889688; }
+    .phase[data-phase="impact"] { color: var(--gold); border-color: #59492c; background: #2c2416; }
+    .phase[data-phase="impact"]::before { background: var(--gold); }
+    .track {
+      --position: 54%; --origin: 54%; --back: 10%; --end: 88%; --marker-opacity: 1;
+      position: relative; flex: 1; min-height: 225px; margin: 10px 22px 16px; overflow: hidden;
+      background: radial-gradient(ellipse at 50% 50%, #17271a 0, transparent 69%);
+      isolation: isolate;
+    }
+    .track::before {
+      content: ""; z-index: -1; position: absolute; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent 0 23px, #6ca37314 23px 24px),
+                  repeating-linear-gradient(90deg, transparent 0 23px, #6ca37314 23px 24px);
+      mask-image: radial-gradient(ellipse at center, black 5%, transparent 72%);
+    }
+    .rail { position: absolute; left: 1%; right: 1%; top: 49%; height: 1px; background: #46574a; }
+    .rail::before { content: ""; position: absolute; inset: -3px 0; border-inline: 1px solid #46574a; }
+    .reference { position: absolute; top: calc(49% - 4px); width: 9px; height: 9px; transform: translateX(-50%); border: 1px solid #9ba99b; border-radius: 50%; background: #111812; }
+    .reference.back { left: var(--back); }
+    .reference.end { left: var(--end); }
+    .reference.impact { left: var(--origin); width: 12px; height: 12px; top: calc(49% - 5.5px); border-color: var(--gold); box-shadow: 0 0 0 4px #ffd68a20; }
+    .impact-guide { position: absolute; top: calc(49% - 55px); height: 110px; left: var(--origin); border-left: 1px dashed #ffd68a66; }
+    .marker { position: absolute; left: var(--position); top: 49%; width: 5px; height: clamp(66px, 11vw, 104px); transform: translate(-50%, -50%); border-radius: 7px; background: var(--green); box-shadow: 0 0 17px #b9f48594; opacity: var(--marker-opacity); }
+    .track[data-impact="true"] .marker { background: var(--gold); box-shadow: 0 0 21px #ffd68aaf; }
+    .track[data-idle="true"] .marker { height: 64px; opacity: .54; }
+    .track-label { position: absolute; top: calc(49% + 58px); transform: translateX(-50%); color: var(--muted); font-size: .875rem; white-space: nowrap; }
+    .track-label.back { left: clamp(33px, var(--back), calc(100% - 33px)); }
+    .track-label.end { left: var(--end); }
+    .track-label.impact { left: var(--origin); color: var(--gold); }
+    .transport { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 22px 20px; }
+    .start { min-height: 52px; min-width: 174px; display: inline-flex; gap: 10px; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 12px; background: var(--green); color: #172111; font-weight: 760; padding: 0 15px; }
+    .start:hover { background: #d0ff9f; }
+    .start[data-playing="true"] { background: #223320; border-color: #4b6740; color: var(--green); }
+    .start[data-playing="true"]:hover { background: #2e442a; }
+    .play-icon { width: 0; height: 0; border-block: 6px solid transparent; border-left: 9px solid currentColor; }
+    .start[data-playing="true"] .play-icon { width: 10px; height: 10px; border: 0; border-radius: 2px; background: currentColor; }
+    .focus-trigger { min-height: 52px; padding: 0 15px; border: 1px solid #3c4940; border-radius: 12px; background: #191f1a; font-weight: 650; }
+    .focus-trigger:hover { background: #262f26; }
+    .transport-tip { flex-basis: 100%; color: var(--muted); font-size: .875rem; }
+    .timings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; background: #131914; border-top: 1px solid var(--line); }
+    .timings div { padding: 11px 14px 13px 20px; }
+    .timings div + div { border-left: 1px solid var(--line); }
+    .timings dt { font-size: .875rem; color: var(--muted); }
+    .timings dd { margin: 2px 0 0; font-size: clamp(1.04rem, 2vw, 1.4rem); font-weight: 690; font-variant-numeric: tabular-nums; }
+    .settings { background: var(--panel); padding: 18px 19px; }
+    .settings h2 { margin-bottom: 13px; }
+    .settings-group { padding: 12px 0; border-top: 1px solid var(--line); }
+    .settings-group:first-of-type { border-top: 0; padding-top: 0; }
+    .settings-group:last-child { padding-bottom: 0; }
+    .settings-heading { color: var(--muted); font-size: .875rem; font-weight: 600; }
+    .tempo-display, .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .tempo-reading { color: var(--green); font-size: 2.5rem; font-weight: 700; line-height: 1.05; letter-spacing: -.055em; font-variant-numeric: tabular-nums; }
+    .tempo-reading small { font-size: .8rem; font-weight: 650; letter-spacing: .03em; }
+    .tempo-stepper { display: flex; gap: 6px; }
+    .step { width: 43px; min-height: 44px; border: 1px solid var(--line); border-radius: 9px; background: #191e1a; font-size: 1.2rem; }
+    .step:hover, .option:hover { background: #252d26; }
+    .range { display: block; width: 100%; height: 33px; margin: 1px 0 4px; accent-color: var(--green); cursor: pointer; }
+    .options { display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; gap: 5px; }
+    .option { min-height: 44px; padding: 4px 3px; border: 1px solid var(--line); border-radius: 9px; background: #191e1a; font-size: .875rem; }
+    .option[aria-pressed="true"] { color: var(--green); border-color: #4a633d; background: var(--green-dark); font-weight: 650; }
+    .settings-heading + .options { margin-top: 6px; }
+    .settings-note { color: var(--muted); margin-top: 5px; font-size: .875rem; }
+    .switch { min-height: 40px; padding: 3px 0 3px 8px; border: 0; background: none; display: inline-flex; align-items: center; gap: 8px; font-size: .875rem; }
+    .switch-track { width: 38px; height: 22px; border-radius: 30px; border: 1px solid #59625a; background: #303832; padding: 3px; }
+    .switch-track::before { content: ""; display: block; width: 14px; height: 14px; background: #d2dbd0; border-radius: 50%; }
+    .switch[aria-checked="true"] .switch-track { background: var(--green); border-color: var(--green); }
+    .switch[aria-checked="true"] .switch-track::before { transform: translateX(15px); background: #233219; }
+    .guide { display: flex; flex-wrap: wrap; gap: 7px 20px; padding: 16px 2px 30px; color: var(--muted); font-size: .875rem; }
+    .guide strong { color: var(--text); font-weight: 650; }
+    .guide span + span { display: inline-flex; gap: 6px; }
+    .guide span + span::before { content: ""; width: 5px; height: 5px; margin-top: 8px; border-radius: 50%; background: var(--green); }
+    .guide span:last-child::before { background: var(--gold); }
+    .offline-status { margin: -14px 2px 22px; color: var(--muted); font-size: .875rem; }
+    .offline-status[data-ready="true"] { color: var(--green); }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+    body.focus-active { overflow: hidden; overscroll-behavior: none; background: #000; }
+    .focus-view {
+      --travel: 0%; --opacity: 1; --edge: calc(env(safe-area-inset-top, 0px) + 4px);
+      position: fixed; z-index: 2; inset: 0; width: 100%; height: 100%; display: block;
+      overflow: hidden; margin: 0; padding: 0; border: 0; border-radius: 0; background: #000;
+    }
+    .focus-view[hidden] { display: none; }
+    .focus-view:focus-visible { outline: none; }
+    .focus-view::backdrop { background: #000; }
+    .focus-line {
+      position: absolute; top: calc(var(--edge) + var(--travel)); left: 50%;
+      width: clamp(68px, 33vw, 150px); height: 5px; transform: translate(-50%, -50%);
+      border-radius: 3px; background: var(--green); opacity: var(--opacity); pointer-events: none;
+    }
+    .focus-view[data-edge="left"] { --edge: calc(env(safe-area-inset-left, 0px) + 4px); }
+    .focus-view[data-edge="right"] { --edge: calc(100% - env(safe-area-inset-right, 0px) - 4px); }
+    .focus-view[data-edge="left"] .focus-line, .focus-view[data-edge="right"] .focus-line {
+      top: 50%; left: calc(var(--edge) + var(--travel)); width: 5px; height: clamp(68px, 33vh, 150px);
+    }
+    @media (max-width: 760px) {
+      .workspace { grid-template-columns: 1fr; gap: 13px; }
+      .track { flex: none; min-height: clamp(160px, 34vw, 225px); }
+      .intro { padding-top: 25px; }
+    }
+    @media (max-width: 460px) {
+      .masthead { min-height: 55px; }
+      .intro p { font-size: .9375rem; }
+      .practice, .settings { border-radius: 17px; }
+      .practice-top { padding: 13px 13px 0; }
+      .track { margin: 4px 13px 10px; }
+      .track-label { top: calc(49% + 49px); font-size: .8125rem; }
+      .transport { padding: 0 13px 13px; gap: 10px; }
+      .start, .focus-trigger { min-height: 47px; }
+      .start { min-width: 131px; }
+      .transport-tip { font-size: .8125rem; }
+      .timings div { padding: 8px 8px 9px 11px; }
+      .timings dt { font-size: .8125rem; }
+      .settings { padding: 14px; }
+    }
+    @media (max-width: 350px) {
+      .site-label { display: none; }
+    }
+    @media (max-height: 490px) and (orientation: landscape) {
+      .intro { padding-block: 14px; }
+      h1 { font-size: 2.2rem; }
+      .track { min-height: 165px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header" id="site-header">
+    <div class="shell masthead">
+      <div class="brand"><span class="brand-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Puttakt</div>
+      <div class="site-label">Tempoträning för puttning</div>
+    </div>
+  </header>
+  <main class="shell" id="main">
+    <div class="intro">
+      <h1>Hitta din puttrytm.</h1>
+      <p>Följ strecket med putterhuvudet och låt tonerna guida svingen.</p>
+    </div>
+    <div class="workspace">
+      <section class="practice" aria-labelledby="practice-title">
+        <div class="practice-top">
+          <h2 id="practice-title">Svingbana</h2>
+          <span id="phase" class="phase" data-phase="ready">Redo</span>
+        </div>
+        <div id="track" class="track" data-idle="true" aria-hidden="true">
+          <div class="rail"></div>
+          <div class="impact-guide"></div>
+          <div class="reference back"></div><div class="reference impact"></div><div class="reference end"></div>
+          <div class="marker"></div>
+          <span class="track-label back">Vändning</span><span class="track-label impact">Träff</span><span class="track-label end">Avslut</span>
+        </div>
+        <div class="transport">
+          <button class="start" id="start" type="button" data-playing="false"><span class="play-icon" aria-hidden="true"></span><span id="start-label">Starta</span></button>
+          <button class="focus-trigger" id="focus-trigger" type="button" aria-describedby="tip">Helskärm</button>
+          <p class="transport-tip" id="tip">Tryck på Starta och vrid mobilen. Tryck på skärmen eller vänd tillbaka för att avsluta helskärm.</p>
+          <span class="visually-hidden" id="announcement" role="status"></span>
+        </div>
+        <dl class="timings">
+          <div><dt>Baksving</dt><dd id="back-time">0,83 s</dd></div>
+          <div><dt>Fram till träff</dt><dd id="forward-time">0,42 s</dd></div>
+          <div><dt>Start till träff</dt><dd id="total-time">1,25 s</dd></div>
+        </dl>
+      </section>
+      <section class="settings" aria-labelledby="settings-title">
+        <h2 id="settings-title">Inställningar</h2>
+        <div class="settings-group">
+          <label class="settings-heading" for="tempo">Tempo</label>
+          <div class="tempo-display">
+            <div class="tempo-reading" aria-hidden="true"><span id="bpm">72</span> <small>BPM</small></div>
+            <div class="tempo-stepper">
+              <button type="button" class="step" id="slower" aria-label="Sänk tempot med en BPM">−</button>
+              <button type="button" class="step" id="faster" aria-label="Höj tempot med en BPM">+</button>
+            </div>
+          </div>
+          <input class="range" id="tempo" type="range" min="45" max="120" value="72" aria-valuetext="72 BPM" aria-describedby="tempo-note">
+          <div class="options" role="group" aria-label="Förvalda tempon">
+            <button type="button" class="option" data-bpm="60" aria-pressed="false" aria-label="Lugnt, 60 BPM">Lugnt</button>
+            <button type="button" class="option" data-bpm="72" aria-pressed="true" aria-label="Mellan, 72 BPM">Mellan</button>
+            <button type="button" class="option" data-bpm="84" aria-pressed="false" aria-label="Snabbt, 84 BPM">Snabbt</button>
+          </div>
+          <p class="settings-note" id="tempo-note">Ett slag i valt tempo motsvarar tiden för en baksving.</p>
+        </div>
+        <div class="settings-group">
+          <h3 class="settings-heading" id="ratio-title">Rytm</h3>
+          <div class="options" role="group" aria-labelledby="ratio-title" aria-describedby="ratio-note">
+            <button type="button" class="option" data-ratio="1.5" aria-pressed="false">1,5 : 1</button>
+            <button type="button" class="option" data-ratio="2" aria-pressed="true">2 : 1</button>
+            <button type="button" class="option" data-ratio="2.5" aria-pressed="false">2,5 : 1</button>
+          </div>
+          <p class="settings-note" id="ratio-note">Baksvingens tid jämfört med tiden från vändning till träff.</p>
+        </div>
+        <div class="settings-group">
+          <h3 class="settings-heading" id="direction-title">Spelriktning</h3>
+          <div class="options" role="group" aria-labelledby="direction-title">
+            <button type="button" class="option" data-direction="right" aria-pressed="true">Åt höger</button>
+            <button type="button" class="option" data-direction="left" aria-pressed="false">Åt vänster</button>
+          </div>
+          <p class="settings-note">I mobilens helskärmsläge startar strecket vid telefonens överkant.</p>
+        </div>
+        <div class="settings-group toggle-row">
+          <h3 class="settings-heading" id="sound-title">Ljudsignaler</h3>
+          <button class="switch" id="sound" type="button" role="switch" aria-checked="true" aria-labelledby="sound-title"><span id="sound-label" aria-hidden="true">På</span><span class="switch-track" aria-hidden="true"></span></button>
+        </div>
+      </section>
+    </div>
+    <div class="guide"><span><strong>Lyssna efter</strong></span><span>Försignal</span><span>Startton</span><span>Träffton</span></div>
+    <p class="offline-status" id="offline-status" role="status" hidden></p>
+  </main>
+  <button class="focus-view" id="focus-view" type="button" aria-label="Avsluta helskärm" hidden><span class="focus-line" aria-hidden="true"></span></button>
+  <noscript><p class="shell">Aktivera JavaScript i webbläsaren för att starta träningen.</p></noscript>
+  <script>
+    'use strict';
+
+    // Positions along the display. A full cosine arc moves smoothly through impact.
+    const positions = { back: 0.10, impact: 0.54, end: 0.88 };
+    const resetTime = 1.25;
+    const audioLeadIn = 0.14;
+    const preparationTime = 0.35;
+    const impactFraction = (positions.impact - positions.back) / (positions.end - positions.back);
+    const forwardImpactTime = Math.acos(1 - 2 * impactFraction) / Math.PI;
+    const phaseLabels = { ready: 'Redo', back: 'Baksving', forward: 'Framåt', impact: 'Träff', follow: 'Avslut', reset: 'Nästa putt' };
+    const cues = [
+      { frequency: 645, length: 0.045, volume: 0.20 }, // Försignal
+      { frequency: 385, length: 0.065, volume: 0.24 }, // Start
+      { frequency: 890, length: 0.08, volume: 0.34 }, // Träff
+    ];
+    const practiceTip = 'Tryck på Starta och vrid mobilen. Tryck på skärmen eller vänd tillbaka för att avsluta helskärm.';
+    const defaults = { bpm: 72, ratio: 2, direction: 'right', sound: true };
+    const storageKey = 'puttakt.settings.v1';
+    const timeFormat = new Intl.NumberFormat('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const byId = (id) => document.getElementById(id);
+    const tempo = byId('tempo');
+    const minBpm = Number(tempo.min);
+    const maxBpm = Number(tempo.max);
+    const slower = byId('slower');
+    const faster = byId('faster');
+    const track = byId('track');
+    const phase = byId('phase');
+    const startButton = byId('start');
+    const startLabel = byId('start-label');
+    const focusTrigger = byId('focus-trigger');
+    const focusView = byId('focus-view');
+    const settingsContainers = [byId('site-header'), byId('main')];
+    const soundButton = byId('sound');
+    const soundLabel = byId('sound-label');
+    const tip = byId('tip');
+    const announcement = byId('announcement');
+    const bpmButtons = [...document.querySelectorAll('[data-bpm]')];
+    const ratioButtons = [...document.querySelectorAll('[data-ratio]')];
+    const directionButtons = [...document.querySelectorAll('[data-direction]')];
+    const landscape = window.matchMedia('(orientation: landscape)');
+    const touch = window.matchMedia('(hover: none) and (pointer: coarse)');
+
+    let settings = loadSettings();
+    let audioContext;
+    let masterGain;
+    let session;
+    let startAttempt = 0;
+    let starting = false;
+    let focusSawLandscape = false;
+    let nativeFullscreen = false;
+    let returnFocus;
+    const activeTones = new Set();
+
+    function loadSettings() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(storageKey));
+        if (!saved || typeof saved !== 'object') return { ...defaults };
+        return {
+          bpm: Number.isInteger(saved.bpm) && saved.bpm >= minBpm && saved.bpm <= maxBpm ? saved.bpm : defaults.bpm,
+          ratio: [1.5, 2, 2.5].includes(saved.ratio) ? saved.ratio : defaults.ratio,
+          direction: ['left', 'right'].includes(saved.direction) ? saved.direction : defaults.direction,
+          sound: typeof saved.sound === 'boolean' ? saved.sound : defaults.sound,
+        };
+      } catch {
+        return { ...defaults };
+      }
+    }
+
+    function timings() {
+      const back = 60 / settings.bpm;
+      const forward = back / settings.ratio;
+      const impact = back + forward;
+      const finish = back + forward / forwardImpactTime;
+      return { back, forward, impact, finish, cycle: finish + resetTime };
+    }
+
+    function swingAt(elapsed, timing) {
+      if (elapsed < 0) return { position: positions.impact, phase: 'ready', opacity: 1 };
+      if (elapsed < timing.back) {
+        const progress = (1 - Math.cos(Math.PI * elapsed / timing.back)) / 2;
+        return { position: positions.impact + (positions.back - positions.impact) * progress, phase: 'back', opacity: 1 };
+      }
+      if (elapsed < timing.finish) {
+        const progress = (1 - Math.cos(Math.PI * (elapsed - timing.back) / (timing.finish - timing.back))) / 2;
+        const currentPhase = elapsed < timing.impact ? 'forward' : elapsed < timing.impact + 0.10 ? 'impact' : 'follow';
+        return { position: positions.back + (positions.end - positions.back) * progress, phase: currentPhase, opacity: 1 };
+      }
+      const reset = elapsed - timing.finish;
+      if (reset < 0.20) return { position: positions.end, phase: 'follow', opacity: 1 - reset / 0.20 };
+      return { position: positions.impact, phase: 'reset', opacity: Math.min(1, (reset - 0.20) / 0.20) };
+    }
+
+    function trackPercent(position) {
+      return `${(settings.direction === 'left' ? 1 - position : position) * 100}%`;
+    }
+
+    function drawSwing(frame) {
+      if (!focusView.hidden) {
+        const intoScreen = focusView.dataset.edge === 'right' ? -1 : 1;
+        // Map impact to the edge. Keep the full path beyond the clipped viewport.
+        const displacement = (positions.impact - frame.position) / (positions.impact - positions.back);
+        focusView.style.setProperty('--travel', `${intoScreen * displacement * 82}%`);
+        focusView.style.setProperty('--opacity', frame.opacity);
+        return;
+      }
+      track.style.setProperty('--position', trackPercent(frame.position));
+      track.style.setProperty('--marker-opacity', frame.opacity);
+      if (phase.dataset.phase !== frame.phase) {
+        phase.dataset.phase = frame.phase;
+        phase.textContent = phaseLabels[frame.phase];
+        track.dataset.impact = String(frame.phase === 'impact');
+      }
+    }
+
+    function focusEdge() {
+      const legacyAngle = window.orientation;
+      const screenAngle = window.screen.orientation?.angle;
+      if (!landscape.matches) return 'top';
+      // On iPhone, turning the top of the device to the right reports -90.
+      if (legacyAngle === -90 || legacyAngle === 90) return legacyAngle === -90 ? 'right' : 'left';
+      if (touch.matches && (screenAngle === 90 || screenAngle === 270)) return screenAngle === 270 ? 'right' : 'left';
+      return settings.direction;
+    }
+
+    function showFocus(requestFullscreen = false) {
+      if (!focusView.hidden) return;
+      returnFocus = requestFullscreen ? focusTrigger : startButton;
+      focusSawLandscape = landscape.matches;
+      focusView.dataset.edge = focusEdge();
+      focusView.hidden = false;
+      document.body.classList.add('focus-active');
+      for (const container of settingsContainers) container.inert = true;
+      if (session) renderFrame(session);
+      else drawSwing(swingAt(-1, timings()));
+      focusView.focus({ preventScroll: true });
+      if (requestFullscreen && document.fullscreenEnabled) {
+        focusView.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {});
+      }
+    }
+
+    function hideFocus() {
+      if (focusView.hidden) return;
+      focusView.hidden = true;
+      document.body.classList.remove('focus-active');
+      for (const container of settingsContainers) container.inert = false;
+      if (document.fullscreenElement === focusView) void document.exitFullscreen().catch(() => {});
+      returnFocus.focus({ preventScroll: true });
+    }
+
+    function handleOrientation() {
+      if (focusView.hidden) {
+        if ((session || starting) && touch.matches && landscape.matches) showFocus();
+        return;
+      }
+      if (focusSawLandscape && !landscape.matches) {
+        stop();
+        return;
+      }
+      focusSawLandscape ||= landscape.matches;
+      focusView.dataset.edge = focusEdge();
+      if (session) renderFrame(session);
+      else drawSwing(swingAt(-1, timings()));
+    }
+
+    function syncPractice() {
+      const running = Boolean(session);
+      startButton.dataset.playing = String(running);
+      startLabel.textContent = running ? 'Stoppa' : starting ? 'Startar…' : 'Starta';
+      track.dataset.idle = String(!running);
+      startButton.setAttribute('aria-busy', String(starting));
+    }
+
+    function updateControls() {
+      const timing = timings();
+      byId('bpm').textContent = settings.bpm;
+      tempo.value = settings.bpm;
+      tempo.setAttribute('aria-valuetext', `${settings.bpm} BPM`);
+      slower.disabled = settings.bpm === minBpm;
+      faster.disabled = settings.bpm === maxBpm;
+      for (const button of bpmButtons) button.setAttribute('aria-pressed', String(Number(button.dataset.bpm) === settings.bpm));
+      for (const button of ratioButtons) button.setAttribute('aria-pressed', String(Number(button.dataset.ratio) === settings.ratio));
+      for (const button of directionButtons) button.setAttribute('aria-pressed', String(button.dataset.direction === settings.direction));
+      soundButton.setAttribute('aria-checked', String(settings.sound));
+      soundLabel.textContent = settings.sound ? 'På' : 'Av';
+      byId('back-time').textContent = `${timeFormat.format(timing.back)} s`;
+      byId('forward-time').textContent = `${timeFormat.format(timing.forward)} s`;
+      byId('total-time').textContent = `${timeFormat.format(timing.impact)} s`;
+      track.style.setProperty('--back', trackPercent(positions.back));
+      track.style.setProperty('--origin', trackPercent(positions.impact));
+      track.style.setProperty('--end', trackPercent(positions.end));
+    }
+
+    function changeSetting(key, value) {
+      if (settings[key] === value) return;
+      settings[key] = value;
+      try { localStorage.setItem(storageKey, JSON.stringify(settings)); } catch { /* Storage can be unavailable for local files. */ }
+      updateControls();
+      if (key === 'sound') {
+        setVolume();
+        if (session && !session.audio && value) {
+          stop();
+          void start();
+        }
+        if (session && !value) tip.textContent = practiceTip;
+      } else if (session && (key === 'bpm' || key === 'ratio')) {
+        const audio = session.audio;
+        clearSession();
+        beginSession(audio);
+      } else if (key === 'direction') {
+        if (session) renderFrame(session);
+        else drawSwing(swingAt(-1, timings()));
+      }
+    }
+
+    function setTempo(value) {
+      changeSetting('bpm', Math.max(minBpm, Math.min(maxBpm, value)));
+    }
+
+    function setVolume() {
+      if (!audioContext || !masterGain || audioContext.state === 'closed') return;
+      masterGain.gain.setTargetAtTime(settings.sound ? 0.66 : 0, audioContext.currentTime, 0.008);
+    }
+
+    async function prepareAudio() {
+      const Audio = window.AudioContext || window.webkitAudioContext;
+      if (!Audio) return false;
+      if (!audioContext || audioContext.state === 'closed') {
+        audioContext = new Audio();
+        masterGain = audioContext.createGain();
+        masterGain.gain.value = settings.sound ? 0.66 : 0;
+        masterGain.connect(audioContext.destination);
+        audioContext.addEventListener('statechange', () => {
+          if (session?.audio && audioContext.state !== 'running') stop('Tryck på Starta för att fortsätta.');
+        });
+      }
+      if (audioContext.state !== 'running') {
+        // Resume inside the user gesture. Fall back to the visual guide if audio stays locked.
+        let timeout;
+        try {
+          await Promise.race([audioContext.resume(), new Promise((resolve) => { timeout = setTimeout(resolve, 800); })]);
+        } finally { clearTimeout(timeout); }
+      }
+      setVolume();
+      return audioContext.state === 'running';
+    }
+
+    function clock(audio) {
+      return audio ? audioContext.currentTime : performance.now() / 1000;
+    }
+
+    function displayClock(audio) {
+      if (!audio) return clock(false);
+      const stamp = audioContext.getOutputTimestamp?.();
+      if (stamp?.performanceTime > 0 && stamp.contextTime > 0) {
+        return Math.min(audioContext.currentTime, stamp.contextTime + (performance.now() - stamp.performanceTime) / 1000);
+      }
+      return audioContext.currentTime - (audioContext.baseLatency || 0) - (audioContext.outputLatency || 0);
+    }
+
+    function playTone(index, at) {
+      const oscillator = audioContext.createOscillator();
+      const envelope = audioContext.createGain();
+      const { frequency, length, volume } = cues[index];
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(frequency, at);
+      envelope.gain.setValueAtTime(0.0001, at);
+      envelope.gain.exponentialRampToValueAtTime(volume, at + 0.005);
+      envelope.gain.exponentialRampToValueAtTime(0.0001, at + length);
+      oscillator.connect(envelope);
+      envelope.connect(masterGain);
+      activeTones.add(oscillator);
+      oscillator.onended = () => {
+        activeTones.delete(oscillator);
+        oscillator.disconnect();
+        envelope.disconnect();
+      };
+      oscillator.start(at);
+      oscillator.stop(at + length + 0.01);
+    }
+
+    function scheduleTones(current) {
+      const now = clock(true);
+      const { cycle, impact } = current.timing;
+      const offsets = [-preparationTime, 0, impact];
+      // Skip expired cycles after a browser stall instead of playing a burst of old beats.
+      const currentCycle = Math.max(0, Math.floor((now - current.start + preparationTime) / cycle));
+      current.nextCue = Math.max(current.nextCue, currentCycle * offsets.length);
+      while (true) {
+        const cue = current.nextCue % offsets.length;
+        const at = current.start + Math.floor(current.nextCue / offsets.length) * cycle + offsets[cue];
+        if (at > now + 0.10) break;
+        if (at >= now - 0.02) playTone(cue, Math.max(at, now));
+        current.nextCue += 1;
+      }
+    }
+
+    function renderFrame(current) {
+      const elapsed = displayClock(current.audio) - current.start;
+      drawSwing(swingAt(elapsed % current.timing.cycle, current.timing));
+    }
+
+    function beginSession(audio) {
+      const current = { audio, timing: timings(), start: clock(audio) + audioLeadIn + preparationTime, nextCue: 0, frame: 0, timer: 0 };
+      session = current;
+      if (audio) {
+        scheduleTones(current);
+        current.timer = setInterval(() => scheduleTones(current), 24);
+      }
+      function animate() {
+        if (session !== current) return;
+        renderFrame(current);
+        current.frame = requestAnimationFrame(animate);
+      }
+      animate();
+      syncPractice();
+    }
+
+    async function start() {
+      const attempt = ++startAttempt;
+      starting = true;
+      syncPractice();
+      let audio = false;
+      try { audio = await prepareAudio(); } catch { /* The visual guide can run independently. */ }
+      if (attempt !== startAttempt) return;
+      starting = false;
+      if (document.hidden) {
+        syncPractice();
+        return;
+      }
+      beginSession(audio);
+      tip.textContent = audio || !settings.sound ? practiceTip : 'Ljudet kunde inte starta.';
+      announcement.textContent = `Träning startad. ${tip.textContent}`;
+    }
+
+    function clearSession() {
+      if (!session) return;
+      clearInterval(session.timer);
+      cancelAnimationFrame(session.frame);
+      session = undefined;
+      for (const oscillator of activeTones) oscillator.stop();
+      activeTones.clear();
+    }
+
+    function stop(message = practiceTip) {
+      startAttempt += 1;
+      starting = false;
+      clearSession();
+      hideFocus();
+      syncPractice();
+      drawSwing(swingAt(-1, timings()));
+      tip.textContent = message;
+      announcement.textContent = `Träning stoppad. ${message}`;
+    }
+
+    startButton.addEventListener('click', () => {
+      if (session) stop();
+      else if (!starting) {
+        void start();
+        if (touch.matches && landscape.matches) showFocus();
+      }
+    });
+    focusTrigger.addEventListener('click', () => {
+      if (!session && !starting) void start();
+      showFocus(true);
+    });
+    focusView.addEventListener('click', () => stop());
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !focusView.hidden) {
+        event.preventDefault();
+        stop();
+      }
+    });
+    document.addEventListener('fullscreenchange', () => {
+      const active = document.fullscreenElement === focusView;
+      if (active && focusView.hidden) void document.exitFullscreen().catch(() => {});
+      if (!active && nativeFullscreen && !focusView.hidden) stop();
+      nativeFullscreen = active;
+    });
+    landscape.addEventListener('change', handleOrientation);
+    window.screen.orientation?.addEventListener('change', handleOrientation);
+    window.addEventListener('orientationchange', handleOrientation);
+    slower.addEventListener('click', () => setTempo(settings.bpm - 1));
+    faster.addEventListener('click', () => setTempo(settings.bpm + 1));
+    tempo.addEventListener('input', () => setTempo(Number(tempo.value)));
+    for (const button of bpmButtons) button.addEventListener('click', () => setTempo(Number(button.dataset.bpm)));
+    for (const button of ratioButtons) button.addEventListener('click', () => changeSetting('ratio', Number(button.dataset.ratio)));
+    for (const button of directionButtons) button.addEventListener('click', () => changeSetting('direction', button.dataset.direction));
+    soundButton.addEventListener('click', () => changeSetting('sound', !settings.sound));
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && (session || starting)) stop('Tryck på Starta för att fortsätta.');
+    });
+    window.addEventListener('pagehide', () => { if (session || starting) stop(); });
+
+    async function prepareOffline() {
+      if (!window.isSecureContext || !['https:', 'http:'].includes(window.location.protocol) || !navigator.serviceWorker) return;
+      const status = byId('offline-status');
+      const workers = navigator.serviceWorker;
+      const scope = new URL('./', document.baseURI).href;
+      status.hidden = false;
+      status.textContent = 'Förbereder offlineläget…';
+      const offlineFailed = () => { status.textContent = 'Kunde inte spara offline. Ladda om med internetanslutning.'; };
+      try {
+        const existing = await workers.getRegistration(scope);
+        const registration = existing?.scope === scope && existing.active
+          ? existing : await workers.register('./sw.js');
+        const worker = registration.active ?? registration.waiting ?? registration.installing;
+        if (!worker) throw new Error('Service worker unavailable');
+        await new Promise((resolve, reject) => {
+          function checkState() {
+            if (worker.state === 'activated' || worker.state === 'redundant') {
+              worker.removeEventListener('statechange', checkState);
+              if (worker.state === 'activated') resolve();
+              else reject(new Error('Offline installation failed'));
+            }
+          }
+          worker.addEventListener('statechange', checkState);
+          checkState();
+        });
+        status.dataset.ready = 'true';
+        status.textContent = 'Redo för offlinebruk';
+      } catch { offlineFailed(); }
+    }
+
+    updateControls();
+    drawSwing(swingAt(-1, timings()));
+    void prepareOffline();
+  </script>
+</body>
+</html>
