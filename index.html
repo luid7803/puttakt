@@ -136,6 +136,7 @@
     body.focus-active { overflow: hidden; overscroll-behavior: none; background: #000; }
     .focus-view {
       --travel: 0%; --opacity: 1; --edge: calc(env(safe-area-inset-top, 0px) + 4px);
+      --line-thickness: 6px;
       position: fixed; z-index: 2; inset: 0; width: 100%; height: 100%; display: block;
       overflow: hidden; margin: 0; padding: 0; border: 0; border-radius: 0; background: #000;
     }
@@ -144,13 +145,13 @@
     .focus-view::backdrop { background: #000; }
     .focus-line {
       position: absolute; top: calc(var(--edge) + var(--travel)); left: 50%;
-      width: clamp(78px, 38vw, 174px); height: 5px; transform: translate(-50%, -50%);
-      border-radius: 3px; background: var(--stroke); opacity: var(--opacity); pointer-events: none;
+      width: 100%; height: var(--line-thickness); transform: translate(-50%, -50%);
+      background: var(--stroke); opacity: var(--opacity); pointer-events: none;
     }
     .focus-view[data-edge="left"] { --edge: calc(env(safe-area-inset-left, 0px) + 4px); }
     .focus-view[data-edge="right"] { --edge: calc(100% - env(safe-area-inset-right, 0px) - 4px); }
     .focus-view[data-edge="left"] .focus-line, .focus-view[data-edge="right"] .focus-line {
-      top: 50%; left: calc(var(--edge) + var(--travel)); width: 5px; height: clamp(78px, 38vh, 174px);
+      top: 50%; left: calc(var(--edge) + var(--travel)); width: var(--line-thickness); height: 100%;
     }
     @media (max-width: 760px) {
       .workspace { grid-template-columns: 1fr; gap: 13px; }
