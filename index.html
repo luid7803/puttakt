@@ -157,7 +157,7 @@
     .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
     body.focus-active { overflow: hidden; overscroll-behavior: none; background: #000; }
     .focus-view {
-      --travel: 0%; --opacity: 1; --edge: calc(env(safe-area-inset-top, 0px) + 4px);
+      --edge: calc(env(safe-area-inset-top, 0px) + 4px);
       --line-thickness: 6px;
       position: fixed; z-index: 2; inset: 0; width: 100%; height: 100%; display: block;
       overflow: hidden; margin: 0; padding: 0; border: 0; border-radius: 0; background: #000;
@@ -166,16 +166,16 @@
     .focus-view:focus-visible { outline: none; }
     .focus-view::backdrop { background: #000; }
     .focus-line {
-      position: absolute; top: calc(var(--edge) + var(--travel)); left: 50%;
-      width: 100%; height: var(--line-thickness); transform: translate(-50%, -50%);
-      background: var(--stroke); opacity: var(--opacity); pointer-events: none;
+      position: absolute; top: calc(var(--edge) - var(--line-thickness) / 2); left: 0;
+      width: 100%; height: var(--line-thickness);
+      background: var(--stroke); pointer-events: none; will-change: transform, opacity;
     }
     .focus-view[data-edge="left"] { --edge: calc(env(safe-area-inset-left, 0px) + 4px); }
     .focus-view[data-edge="right"] { --edge: calc(100% - env(safe-area-inset-right, 0px) - 4px); }
     .focus-view[data-measured="true"] { --edge: calc((100% - var(--phone-span)) / 2); }
     .focus-view[data-measured="true"][data-edge="right"] { --edge: calc((100% + var(--phone-span)) / 2); }
     .focus-view[data-edge="left"] .focus-line, .focus-view[data-edge="right"] .focus-line {
-      top: 50%; left: calc(var(--edge) + var(--travel)); width: var(--line-thickness); height: 100%;
+      top: 0; left: calc(var(--edge) - var(--line-thickness) / 2); width: var(--line-thickness); height: 100%;
     }
     @media (max-width: 760px) {
       .workspace { grid-template-columns: 1fr; gap: 13px; }
@@ -336,7 +336,7 @@
     <div class="guide"><span><strong>Lyssna efter</strong></span><span>Försignal</span><span>Startton</span><span>Träffton</span></div>
     <p class="offline-status" id="offline-status" role="status" hidden></p>
   </main>
-  <button class="focus-view" id="focus-view" type="button" aria-label="Avsluta helskärm" hidden><span class="focus-line" aria-hidden="true"></span></button>
+  <button class="focus-view" id="focus-view" type="button" aria-label="Avsluta helskärm" hidden><span class="focus-line" id="focus-line" aria-hidden="true"></span></button>
   <noscript><p class="shell">Aktivera JavaScript i webbläsaren för att starta träningen.</p></noscript>
   <script>
     'use strict';
@@ -416,6 +416,7 @@
     const startLabel = byId('start-label');
     const focusTrigger = byId('focus-trigger');
     const focusView = byId('focus-view');
+    const focusLine = byId('focus-line');
     const distanceMode = byId('distance-mode');
     const stimpSelect = byId('stimp');
     const puttLengthSelect = byId('putt-length');
@@ -444,7 +445,8 @@
     let focusSawLandscape = false;
     let nativeFullscreen = false;
     let returnFocus;
-    let focusTravelPixels = null;
+    let focusTravelPixels = 0;
+    let focusEdgeCorrection = 0;
     const activeTones = new Set();
 
     function loadSettings() {
@@ -585,14 +587,25 @@
       return `${(settings.direction === 'left' ? 1 - position : position) * 100}%`;
     }
 
+    function focusTransform(position) {
+      const progress = (positions.impact - position) / (positions.impact - positions.back);
+      const travel = progress * focusTravelPixels;
+      let visibleTravel = travel;
+      if (focusEdgeCorrection > 0) {
+        // Bring the impact cue just inside the glass and blend back to the physical path away from it.
+        const blendDistance = Math.min(focusTravelPixels, 4 * focusEdgeCorrection);
+        const blend = Math.max(0, 1 - Math.abs(travel) / blendDistance);
+        visibleTravel += focusEdgeCorrection * blend * blend * (3 - 2 * blend);
+      }
+      const edge = focusView.dataset.edge;
+      if (edge === 'top') return `translate3d(0, ${visibleTravel}px, 0)`;
+      return `translate3d(${edge === 'right' ? -visibleTravel : visibleTravel}px, 0, 0)`;
+    }
+
     function drawSwing(frame) {
       if (!focusView.hidden) {
-        const intoScreen = focusView.dataset.edge === 'right' ? -1 : 1;
-        // Map impact to the edge. Keep the full path beyond the clipped viewport.
-        const displacement = (positions.impact - frame.position) / (positions.impact - positions.back);
-        const travel = intoScreen * displacement;
-        focusView.style.setProperty('--travel', focusTravelPixels === null ? `${travel * 82}%` : `${travel * focusTravelPixels}px`);
-        focusView.style.setProperty('--opacity', frame.opacity);
+        focusLine.style.transform = focusTransform(frame.position);
+        focusLine.style.opacity = frame.opacity;
         return;
       }
       track.style.setProperty('--position', trackPercent(frame.position));
@@ -603,15 +616,65 @@
       }
     }
 
-    function updateFocusScale() {
+    function refreshFocus() {
       if (focusView.hidden) return;
+      const extent = focusView.dataset.edge === 'top' ? focusView.clientHeight : focusView.clientWidth;
       const measured = settings.distanceMode && canStart();
       focusView.dataset.measured = String(measured);
-      focusTravelPixels = null;
+      focusTravelPixels = extent * 0.82;
+      focusEdgeCorrection = 0;
       if (measured) {
         const scale = pixelsPerCm();
+        const phoneSpan = phoneLengthCm() * scale;
         focusTravelPixels = selectedBackswing() * scale;
-        focusView.style.setProperty('--phone-span', `${phoneLengthCm() * scale}px`);
+        focusEdgeCorrection = Math.max(0, 4 - (extent - phoneSpan) / 2);
+        focusView.style.setProperty('--phone-span', `${phoneSpan}px`);
+      }
+      if (session) {
+        startFocusAnimation(session);
+        if (!session.focusAnimation) renderFrame(session);
+      } else drawSwing(swingAt(-1, timings()));
+    }
+
+    function focusKeyframes(timing) {
+      const stepCount = Math.ceil(timing.finish * 120);
+      const sampleTimes = new Set([0, timing.back, timing.impact, timing.finish]);
+      for (let step = 1; step < stepCount; step += 1) sampleTimes.add(timing.finish * step / stepCount);
+      const keyframe = (time, position, opacity) => ({ offset: time / timing.cycle, transform: focusTransform(position), opacity });
+      const frames = [...sampleTimes].sort((first, second) => first - second).map((time) => {
+        const { position, opacity } = swingAt(time, timing);
+        return keyframe(time, position, opacity);
+      });
+      const reset = timing.finish + 0.20;
+      frames.push(
+        keyframe(reset, positions.end, 0),
+        keyframe(reset, positions.impact, 0),
+        keyframe(reset + 0.20, positions.impact, 1),
+        keyframe(timing.cycle, positions.impact, 1),
+      );
+      return frames;
+    }
+
+    function alignFocusAnimation(current) {
+      const timelineTime = document.timeline?.currentTime;
+      if (typeof timelineTime !== 'number') return;
+      const startTime = timelineTime + (current.start - displayClock(current.audio)) * 1000;
+      const animation = current.focusAnimation;
+      if (animation.startTime === null || Math.abs(startTime - animation.startTime) > 20) animation.startTime = startTime;
+    }
+
+    function startFocusAnimation(current) {
+      current.focusAnimation?.cancel();
+      current.focusAnimation = undefined;
+      if (focusView.hidden || !focusLine.animate || typeof document.timeline?.currentTime !== 'number') return;
+      try {
+        current.focusAnimation = focusLine.animate(focusKeyframes(current.timing), {
+          duration: current.timing.cycle * 1000, iterations: Infinity, fill: 'both',
+        });
+        alignFocusAnimation(current);
+      } catch {
+        current.focusAnimation?.cancel();
+        current.focusAnimation = undefined;
       }
     }
 
@@ -631,11 +694,9 @@
       focusSawLandscape = landscape.matches;
       focusView.dataset.edge = focusEdge();
       focusView.hidden = false;
-      updateFocusScale();
       document.body.classList.add('focus-active');
       for (const container of settingsContainers) container.inert = true;
-      if (session) renderFrame(session);
-      else drawSwing(swingAt(-1, timings()));
+      refreshFocus();
       focusView.focus({ preventScroll: true });
       if (requestFullscreen && document.fullscreenEnabled) {
         focusView.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {});
@@ -662,9 +723,7 @@
       }
       focusSawLandscape ||= landscape.matches;
       focusView.dataset.edge = focusEdge();
-      updateFocusScale();
-      if (session) renderFrame(session);
-      else drawSwing(swingAt(-1, timings()));
+      refreshFocus();
     }
 
     function syncPractice() {
@@ -848,13 +907,19 @@
     function beginSession(audio) {
       const current = { audio, timing: timings(), start: clock(audio) + audioLeadIn + preparationTime, nextCue: 0, frame: 0, timer: 0 };
       session = current;
+      startFocusAnimation(current);
       if (audio) {
         scheduleTones(current);
         current.timer = setInterval(() => scheduleTones(current), 24);
       }
-      function animate() {
+      let nextSync = 0;
+      function animate(now = performance.now()) {
         if (session !== current) return;
-        renderFrame(current);
+        if (!current.focusAnimation) renderFrame(current);
+        else if (now >= nextSync) {
+          alignFocusAnimation(current);
+          nextSync = now + 1000;
+        }
         current.frame = requestAnimationFrame(animate);
       }
       animate();
@@ -883,6 +948,7 @@
       if (!session) return;
       clearInterval(session.timer);
       cancelAnimationFrame(session.frame);
+      session.focusAnimation?.cancel();
       session = undefined;
       for (const oscillator of activeTones) oscillator.stop();
       activeTones.clear();
@@ -920,13 +986,15 @@
     document.addEventListener('fullscreenchange', () => {
       const active = document.fullscreenElement === focusView;
       if (active && focusView.hidden) void document.exitFullscreen().catch(() => {});
+      if (active) refreshFocus();
       if (!active && nativeFullscreen && !focusView.hidden) stop();
       nativeFullscreen = active;
     });
     landscape.addEventListener('change', handleOrientation);
     window.screen.orientation?.addEventListener('change', handleOrientation);
     window.addEventListener('orientationchange', handleOrientation);
-    window.visualViewport?.addEventListener('resize', updateFocusScale);
+    window.addEventListener('resize', refreshFocus);
+    window.visualViewport?.addEventListener('resize', refreshFocus);
     slower.addEventListener('click', () => setTempo(settings.bpm - 1));
     faster.addEventListener('click', () => setTempo(settings.bpm + 1));
     tempo.addEventListener('input', () => setTempo(Number(tempo.value)));
