@@ -165,10 +165,22 @@
     .focus-view[hidden] { display: none; }
     .focus-view:focus-visible { outline: none; }
     .focus-view::backdrop { background: #000; }
+    .focus-marker { position: absolute; inset: 0; pointer-events: none; }
+    .focus-marker, .focus-line, .focus-blur {
+      animation-duration: var(--focus-cycle, 0s);
+      animation-iteration-count: infinite;
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+    }
     .focus-line {
       position: absolute; top: calc(var(--edge) - var(--line-thickness) / 2); left: 0;
       width: 100%; height: var(--line-thickness);
-      background: var(--stroke); pointer-events: none; will-change: transform, opacity;
+      background: var(--stroke); will-change: transform;
+    }
+    .focus-blur {
+      position: absolute; top: 50%; left: 0; margin-top: -40px; width: 100%; height: 80px;
+      background: linear-gradient(to bottom, transparent, #ffffff40, transparent);
+      transform: scaleY(0); will-change: transform;
     }
     .focus-view[data-edge="left"] { --edge: calc(env(safe-area-inset-left, 0px) + 4px); }
     .focus-view[data-edge="right"] { --edge: calc(100% - env(safe-area-inset-right, 0px) - 4px); }
@@ -176,6 +188,11 @@
     .focus-view[data-measured="true"][data-edge="right"] { --edge: calc((100% + var(--phone-span)) / 2); }
     .focus-view[data-edge="left"] .focus-line, .focus-view[data-edge="right"] .focus-line {
       top: 0; left: calc(var(--edge) - var(--line-thickness) / 2); width: var(--line-thickness); height: 100%;
+    }
+    .focus-view[data-edge="left"] .focus-blur, .focus-view[data-edge="right"] .focus-blur {
+      top: 0; left: 50%; margin: 0 0 0 -40px; width: 80px; height: 100%;
+      background: linear-gradient(to right, transparent, #ffffff40, transparent);
+      transform: scaleX(0);
     }
     @media (max-width: 760px) {
       .workspace { grid-template-columns: 1fr; gap: 13px; }
@@ -208,6 +225,7 @@
       .track-label { top: calc(49% + 52px); }
     }
   </style>
+  <style id="focus-keyframes"></style>
 </head>
 <body>
   <header class="site-header" id="site-header">
@@ -336,7 +354,7 @@
     <div class="guide"><span><strong>Lyssna efter</strong></span><span>Försignal</span><span>Startton</span><span>Träffton</span></div>
     <p class="offline-status" id="offline-status" role="status" hidden></p>
   </main>
-  <button class="focus-view" id="focus-view" type="button" aria-label="Avsluta helskärm" hidden><span class="focus-line" id="focus-line" aria-hidden="true"></span></button>
+  <button class="focus-view" id="focus-view" type="button" aria-label="Avsluta helskärm" hidden><span class="focus-marker" id="focus-marker" aria-hidden="true"><span class="focus-line" id="focus-line"><span class="focus-blur" id="focus-blur"></span></span></span></button>
   <noscript><p class="shell">Aktivera JavaScript i webbläsaren för att starta träningen.</p></noscript>
   <script>
     'use strict';
@@ -416,7 +434,10 @@
     const startLabel = byId('start-label');
     const focusTrigger = byId('focus-trigger');
     const focusView = byId('focus-view');
+    const focusMarker = byId('focus-marker');
     const focusLine = byId('focus-line');
+    const focusBlur = byId('focus-blur');
+    const focusKeyframeSheet = byId('focus-keyframes');
     const distanceMode = byId('distance-mode');
     const stimpSelect = byId('stimp');
     const puttLengthSelect = byId('putt-length');
@@ -447,6 +468,7 @@
     let returnFocus;
     let focusTravelPixels = 0;
     let focusEdgeCorrection = 0;
+    let focusAnimationId = 0;
     const activeTones = new Set();
 
     function loadSettings() {
@@ -587,7 +609,7 @@
       return `${(settings.direction === 'left' ? 1 - position : position) * 100}%`;
     }
 
-    function focusTransform(position) {
+    function focusDisplacement(position) {
       const progress = (positions.impact - position) / (positions.impact - positions.back);
       const travel = progress * focusTravelPixels;
       let visibleTravel = travel;
@@ -597,6 +619,11 @@
         const blend = Math.max(0, 1 - Math.abs(travel) / blendDistance);
         visibleTravel += focusEdgeCorrection * blend * blend * (3 - 2 * blend);
       }
+      return visibleTravel;
+    }
+
+    function focusTransform(position) {
+      const visibleTravel = focusDisplacement(position);
       const edge = focusView.dataset.edge;
       if (edge === 'top') return `translate3d(0, ${visibleTravel}px, 0)`;
       return `translate3d(${edge === 'right' ? -visibleTravel : visibleTravel}px, 0, 0)`;
@@ -605,7 +632,7 @@
     function drawSwing(frame) {
       if (!focusView.hidden) {
         focusLine.style.transform = focusTransform(frame.position);
-        focusLine.style.opacity = frame.opacity;
+        focusMarker.style.opacity = frame.opacity;
         return;
       }
       track.style.setProperty('--position', trackPercent(frame.position));
@@ -632,49 +659,85 @@
       }
       if (session) {
         startFocusAnimation(session);
-        if (!session.focusAnimation) renderFrame(session);
+        if (!session.focusAnimations) renderFrame(session);
       } else drawSwing(swingAt(-1, timings()));
     }
 
-    function focusKeyframes(timing) {
+    function blurTransform(time, timing) {
+      const axis = focusView.dataset.edge === 'top' ? 'Y' : 'X';
+      if (time === 0 || time === timing.back || time >= timing.finish) return `scale${axis}(0)`;
+      // Approximate one display frame of exposure so the moving edge is easier to track at 60 Hz.
+      const halfExposure = 1 / 120;
+      const before = swingAt(Math.max(0, time - halfExposure), timing);
+      const after = swingAt(Math.min(timing.finish, time + halfExposure), timing);
+      const sweptPixels = Math.abs(focusDisplacement(after.position) - focusDisplacement(before.position));
+      const scale = Math.min(1, sweptPixels / 80);
+      return `scale${axis}(${scale})`;
+    }
+
+    function focusKeyframes(timing, names) {
       const stepCount = Math.ceil(timing.finish * 120);
       const sampleTimes = new Set([0, timing.back, timing.impact, timing.finish]);
       for (let step = 1; step < stepCount; step += 1) sampleTimes.add(timing.finish * step / stepCount);
-      const keyframe = (time, position, opacity) => ({ offset: time / timing.cycle, transform: focusTransform(position), opacity });
-      const frames = [...sampleTimes].sort((first, second) => first - second).map((time) => {
-        const { position, opacity } = swingAt(time, timing);
-        return keyframe(time, position, opacity);
-      });
-      const reset = timing.finish + 0.20;
-      frames.push(
-        keyframe(reset, positions.end, 0),
-        keyframe(reset, positions.impact, 0),
-        keyframe(reset + 0.20, positions.impact, 1),
-        keyframe(timing.cycle, positions.impact, 1),
+      const keyframe = (time, property, value) => `${time / timing.cycle * 100}% { ${property}: ${value}; }`;
+      const motion = [];
+      const blur = [];
+      for (const time of [...sampleTimes].sort((first, second) => first - second)) {
+        motion.push(keyframe(time, 'transform', focusTransform(swingAt(time, timing).position)));
+        blur.push(keyframe(time, 'transform', blurTransform(time, timing)));
+      }
+      const fadeOut = timing.finish + 0.20;
+      const reset = fadeOut + 0.001;
+      motion.push(
+        keyframe(fadeOut, 'transform', focusTransform(positions.end)),
+        keyframe(reset, 'transform', focusTransform(positions.impact)),
+        keyframe(timing.cycle, 'transform', focusTransform(positions.impact)),
       );
-      return frames;
+      blur.push(keyframe(timing.cycle, 'transform', blurTransform(timing.cycle, timing)));
+      const fade = [
+        keyframe(0, 'opacity', 1),
+        keyframe(timing.finish, 'opacity', 1),
+        keyframe(fadeOut, 'opacity', 0),
+        keyframe(reset, 'opacity', 0),
+        keyframe(reset + 0.20, 'opacity', 1),
+        keyframe(timing.cycle, 'opacity', 1),
+      ];
+      return [motion, blur, fade].map((frames, index) => {
+        return `@keyframes ${names[index]} {\n${frames.join('\n')}\n}`;
+      }).join('\n');
     }
 
-    function alignFocusAnimation(current) {
+    function alignFocusAnimation(current, elapsed = displayClock(current.audio) - current.start) {
       const timelineTime = document.timeline?.currentTime;
       if (typeof timelineTime !== 'number') return;
-      const startTime = timelineTime + (current.start - displayClock(current.audio)) * 1000;
-      const animation = current.focusAnimation;
-      if (animation.startTime === null || Math.abs(startTime - animation.startTime) > 20) animation.startTime = startTime;
+      const startTime = timelineTime - elapsed * 1000;
+      if (current.focusAnimations.some((animation) => animation.startTime === null || Math.abs(startTime - animation.startTime) > 20)) {
+        for (const animation of current.focusAnimations) animation.startTime = startTime;
+      }
+    }
+
+    function stopFocusAnimation(current) {
+      for (const layer of [focusLine, focusBlur, focusMarker]) layer.style.animationName = '';
+      for (const animation of current.focusAnimations ?? []) animation.cancel();
+      current.focusAnimations = undefined;
     }
 
     function startFocusAnimation(current) {
-      current.focusAnimation?.cancel();
-      current.focusAnimation = undefined;
-      if (focusView.hidden || !focusLine.animate || typeof document.timeline?.currentTime !== 'number') return;
+      stopFocusAnimation(current);
+      if (focusView.hidden || !focusLine.getAnimations || typeof document.timeline?.currentTime !== 'number') return;
+      const layers = [focusLine, focusBlur, focusMarker];
+      const id = ++focusAnimationId;
+      const names = ['motion', 'blur', 'fade'].map((kind) => `puttakt-${kind}-${id}`);
       try {
-        current.focusAnimation = focusLine.animate(focusKeyframes(current.timing), {
-          duration: current.timing.cycle * 1000, iterations: Infinity, fill: 'both',
-        });
+        focusKeyframeSheet.textContent = focusKeyframes(current.timing, names);
+        focusView.style.setProperty('--focus-cycle', `${current.timing.cycle}s`);
+        for (const [index, layer] of layers.entries()) layer.style.animationName = names[index];
+        current.focusAnimations = layers.map((layer, index) => layer.getAnimations().find((animation) => animation.animationName === names[index]));
+        if (current.focusAnimations.some((animation) => !animation)) throw new Error('CSS animation unavailable');
         alignFocusAnimation(current);
       } catch {
-        current.focusAnimation?.cancel();
-        current.focusAnimation = undefined;
+        current.focusAnimations = current.focusAnimations?.filter(Boolean);
+        stopFocusAnimation(current);
       }
     }
 
@@ -915,10 +978,13 @@
       let nextSync = 0;
       function animate(now = performance.now()) {
         if (session !== current) return;
-        if (!current.focusAnimation) renderFrame(current);
+        if (!current.focusAnimations) renderFrame(current);
         else if (now >= nextSync) {
-          alignFocusAnimation(current);
-          nextSync = now + 1000;
+          const elapsed = displayClock(current.audio) - current.start;
+          // Any clock correction belongs in the still interval, away from the moving stroke.
+          const resting = elapsed < 0 || elapsed % current.timing.cycle >= current.timing.finish + 0.45;
+          if (resting) alignFocusAnimation(current, elapsed);
+          nextSync = now + (resting ? 1000 : 100);
         }
         current.frame = requestAnimationFrame(animate);
       }
@@ -948,7 +1014,7 @@
       if (!session) return;
       clearInterval(session.timer);
       cancelAnimationFrame(session.frame);
-      session.focusAnimation?.cancel();
+      stopFocusAnimation(session);
       session = undefined;
       for (const oscillator of activeTones) oscillator.stop();
       activeTones.clear();
